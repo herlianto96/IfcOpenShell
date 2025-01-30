@@ -253,7 +253,8 @@ class Usecase:
         self.whitelisted_inverse_attributes = {
             "IfcObjectDefinition": ["HasAssociations"],
             self.base_material_class: ["HasExternalReferences", "HasProperties", "HasRepresentation"],
-            "IfcRepresentationItem": ["StyledByItem"],
+            "IfcRepresentationItem": ["StyledByItem", "LayerAssignment"],
+            "IfcRepresentation": ["LayerAssignments"],
         }
         self.existing_contexts = self.file.by_type("IfcGeometricRepresentationContext")
         element = self.add_element(self.settings["element"])
@@ -266,7 +267,11 @@ class Usecase:
             "IfcObject": ["IsDefinedBy.IfcRelDefinesByProperties"],
             "IfcElement": ["HasOpenings"],
             self.base_material_class: ["HasExternalReferences", "HasProperties", "HasRepresentation"],
-            "IfcRepresentationItem": ["StyledByItem"],
+            "IfcRepresentationItem": [
+                "StyledByItem",
+                "LayerAssignments" if self.file.schema == "IFC2X3" else "LayerAssignment",
+            ],
+            "IfcRepresentation": ["LayerAssignments"],
         }
         self.existing_contexts = self.file.by_type("IfcGeometricRepresentationContext")
         element = self.add_element(self.settings["element"])
@@ -359,6 +364,13 @@ class Usecase:
         # relationships that can reference many other assets that we are not
         # interested in.
 
+        # For layer assignment we don't want to add it's items
+        # to avoid adding representations / items that are not related to current append_asset.
+        skip_not_reused_entities_attr_i = None
+        if element.is_a("IfcPresentationLayerAssignment"):
+            # 3 IfcPresentationLayerAssignment.AssignedItems
+            skip_not_reused_entities_attr_i = 2
+
         element_identity = element.wrapped_data.identity()
 
         # Check if inverse element was created before.
@@ -380,8 +392,15 @@ class Usecase:
             elif isinstance(attribute, tuple) and attribute and isinstance(attribute[0], ifcopenshell.entity_instance):
                 new_attribute = []
                 for item in attribute:
-                    if not self.is_another_asset(item):
-                        new_attribute.append(self.add_element(item))
+                    if self.is_another_asset(item):
+                        continue
+                    if skip_not_reused_entities_attr_i is not None and i == skip_not_reused_entities_attr_i:
+                        identity = item.wrapped_data.identity()
+                        if (item := self.reuse_identities.get(identity)) is None:
+                            continue
+                    else:
+                        item = self.add_element(item)
+                    new_attribute.append(item)
             else:
                 new_attribute = attribute
             if new_attribute is not None:
