@@ -1686,20 +1686,13 @@ class RemoveDrawingFromSheet(bpy.types.Operator, tool.Ifc.Operator):
             return False
 
         if active_item.reference_type == "TITLEBLOCK":
-            cls.poll_message_set("No effect deleting this.")
+            cls.poll_message_set("No effect deleting titleblock reference.")
             return False
         return True
 
     def _execute(self, context):
-        reference = tool.Ifc.get().by_id(self.reference)
-        sheet = tool.Drawing.get_reference_document(reference)
-
-        sheet_builder = sheeter.SheetBuilder()
-        sheet_builder.remove_drawing(reference, sheet)
-
-        tool.Ifc.run("document.remove_reference", reference=reference)
-
-        tool.Drawing.import_sheets()
+        ifc_file = tool.Ifc.get()
+        tool.Drawing.remove_drawing_from_sheet(ifc_file.by_id(self.reference))
 
 
 class CreateSheets(bpy.types.Operator, tool.Ifc.Operator):
@@ -2133,7 +2126,7 @@ class RemoveDrawing(bpy.types.Operator, tool.Ifc.Operator):
         for drawing in drawings:
             sheet_references = tool.Drawing.get_sheet_references(drawing)
             for reference in sheet_references:
-                bpy.ops.bim.remove_drawing_from_sheet(reference=reference.id())
+                tool.Drawing.remove_drawing_from_sheet(reference)
             core.remove_drawing(tool.Ifc, tool.Drawing, drawing=drawing)
 
         # In case we removed the active drawing.
